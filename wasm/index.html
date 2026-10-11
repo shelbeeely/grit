@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: CC0-1.0 -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>grit (WebAssembly)</title>
+<style>
+    body { font-family: sans-serif; max-width: 50em; margin: 1em auto; padding: 0 1em; }
+    input[type=text] { width: 100%; box-sizing: border-box; font-family: monospace; }
+    pre { background: #eee; padding: 0.5em; overflow-x: auto; white-space: pre-wrap; }
+    label { display: block; margin: 0.5em 0; }
+</style>
+</head>
+<body>
+<h1>grit (WebAssembly)</h1>
+<p>Everything runs locally in your browser. Nothing is uploaded.</p>
+
+<label>Input files: <input type="file" id="files" multiple></label>
+<label>Arguments (the names of the selected files can be used as paths):
+    <input type="text" id="args" value="-gB4 -ftc"></label>
+<label><input type="checkbox" id="prepend" checked> Prepend the selected file names to the arguments</label>
+<button id="run">Run grit</button>
+
+<h2>Output files</h2>
+<ul id="outputs"></ul>
+<h2>Log</h2>
+<pre id="log"></pre>
+
+<script type="module">
+import { runGrit } from './grit-wasm.mjs';
+
+const $ = (id) => document.getElementById(id);
+
+// Split a command line, honoring double quotes
+function splitArgs(text) {
+    return [...text.matchAll(/"([^"]*)"|(\S+)/g)].map((m) => m[1] ?? m[2]);
+}
+
+$('run').addEventListener('click', async () => {
+    $('run').disabled = true;
+    $('outputs').replaceChildren();
+    $('log').textContent = 'Running...';
+
+    try {
+        const files = {};
+        for (const file of $('files').files)
+            files[file.name] = new Uint8Array(await file.arrayBuffer());
+
+        let args = splitArgs($('args').value);
+        if ($('prepend').checked)
+            args = [...Object.keys(files), ...args];
+
+        const result = await runGrit({ args, files });
+
+        $('log').textContent = `$ grit ${args.join(' ')}\n` +
+            [result.stdout, result.stderr].filter(Boolean).join('\n') +
+            `\n\nExit code: ${result.exitCode}`;
+
+        for (const [name, data] of Object.entries(result.files)) {
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([data]));
+            a.download = name.split('/').pop();
+            a.textContent = `${name} (${data.length} bytes)`;
+            const li = document.createElement('li');
+            li.append(a);
+            $('outputs').append(li);
+        }
+    } catch (e) {
+        $('log').textContent = String(e?.stack ?? e);
+    } finally {
+        $('run').disabled = false;
+    }
+});
+</script>
+</body>
+</html>

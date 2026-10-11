@@ -388,8 +388,10 @@ std::unique_ptr<Node> buildTree (const uint8_t *src, size_t len, bool fourBit_)
 	// combine nodes
 	while (nodes.size () > 1)
 	{
-		// sort nodes by count; we will combine the two smallest nodes
-		std::sort (std::begin (nodes),
+		// sort nodes by count; we will combine the two smallest nodes. Use a
+		// stable sort so that ties are broken the same way by all C++ standard
+		// libraries, which makes the output identical on all platforms.
+		std::stable_sort (std::begin (nodes),
 		    std::end (nodes),
 		    [] (const std::unique_ptr<Node> &lhs, const std::unique_ptr<Node> &rhs) -> bool {
 			    return *lhs < *rhs;

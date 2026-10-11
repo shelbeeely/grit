@@ -771,6 +771,7 @@ bool grit_xp_gbfs(GritRec *gr)
 	// --- create header and finish entries ---
 	// Create basic header
 	GBFS_FILE gbhdr;
+	memset(&gbhdr, 0, sizeof(gbhdr));
 	memcpy(gbhdr.magic, GBFS_magic, sizeof(GBFS_magic));
 	gbhdr.dir_off= GBFL_SIZE;
 

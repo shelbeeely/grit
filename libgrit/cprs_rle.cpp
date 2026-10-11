@@ -38,7 +38,7 @@ uint rle8gba_compress(RECORD *dst, const RECORD *src)
 	// if srcS is the size of the alternating pattern, then
 	// the endresult will be 4 + srcS + (srcS+0x80-1)/0x80.
 	uint dstS= 8+2*(srcS);
-	BYTE *dstD = (BYTE*)malloc(dstS), *dstL= dstD;
+	BYTE *dstD = (BYTE*)calloc(dstS, 1), *dstL= dstD;
 	if(dstD == NULL)
 		return 0;
 

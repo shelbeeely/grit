@@ -128,7 +128,7 @@ DEPS		:= $(OBJS:.o=.d)
 # Targets
 # -------
 
-.PHONY: all clean docs install
+.PHONY: all clean docs install wasm wasm-node wasm-module
 
 all: $(ELF)
 
@@ -139,6 +139,48 @@ $(ELF): $(OBJS)
 clean:
 	@echo "  CLEAN  "
 	$(V)$(RM) $(ELF) $(BUILDDIR)
+
+# WebAssembly build (Emscripten)
+# ------------------------------
+#
+# wasm-node:   $(WASMDIR)/grit-node.js, a CLI for Node.js that uses the real
+#              filesystem: `node grit-node.js image.png -ftc`
+# wasm-module: $(WASMDIR)/grit.mjs + grit.wasm, an ES6 module factory for
+#              browsers, workers and Node.js that works on an in-memory
+#              filesystem. See wasm/grit-wasm.mjs for a high-level wrapper
+#              and wasm/index.html for a demo page.
+
+EMCC		?= emcc
+EMCXX		?= em++
+WASMDIR		:= $(BUILDDIR)/wasm
+
+WASM_OBJS	:= $(addsuffix .o,$(addprefix $(WASMDIR)/obj/,$(SOURCES_C))) \
+		   $(addsuffix .o,$(addprefix $(WASMDIR)/obj/,$(SOURCES_CPP)))
+
+WASM_LDFLAGS	:= -O3 -sALLOW_MEMORY_GROWTH=1 -sEXIT_RUNTIME=1
+
+WASM_LDFLAGS_NODE	:= $(WASM_LDFLAGS) -sNODERAWFS=1 -sENVIRONMENT=node
+
+WASM_LDFLAGS_MODULE	:= $(WASM_LDFLAGS) -sMODULARIZE=1 -sEXPORT_ES6=1 \
+			   -sEXPORT_NAME=createGritModule -sINVOKE_RUN=0 \
+			   -sFORCE_FILESYSTEM=1 \
+			   -sEXPORTED_RUNTIME_METHODS=FS,callMain \
+			   -sENVIRONMENT=web,worker,node
+
+wasm: wasm-node wasm-module
+
+wasm-node: $(WASMDIR)/grit-node.js
+
+wasm-module: $(WASMDIR)/grit.mjs
+
+$(WASMDIR)/grit-node.js: $(WASM_OBJS)
+	@echo "  EMLD    $@"
+	$(V)$(EMCXX) -o $@ $(WASM_OBJS) $(WASM_LDFLAGS_NODE)
+
+$(WASMDIR)/grit.mjs: $(WASM_OBJS) wasm/grit-wasm.mjs wasm/index.html
+	@echo "  EMLD    $@"
+	$(V)$(EMCXX) -o $@ $(WASM_OBJS) $(WASM_LDFLAGS_MODULE)
+	$(V)$(CP) wasm/grit-wasm.mjs wasm/index.html $(WASMDIR)/
 
 docs:
 	@echo "  DOXYGEN"
@@ -168,7 +210,17 @@ $(BUILDDIR)/%.cpp.o : %.cpp
 	@$(MKDIR) -p $(@D)
 	$(V)$(HOSTCXX) $(CXXFLAGS) -MMD -MP -c -o $@ $<
 
+$(WASMDIR)/obj/%.c.o : %.c
+	@echo "  EMCC    $<"
+	@$(MKDIR) -p $(@D)
+	$(V)$(EMCC) $(CFLAGS) -MMD -MP -c -o $@ $<
+
+$(WASMDIR)/obj/%.cpp.o : %.cpp
+	@echo "  EMCXX   $<"
+	@$(MKDIR) -p $(@D)
+	$(V)$(EMCXX) $(CXXFLAGS) -MMD -MP -c -o $@ $<
+
 # Include dependency files if they exist
 # --------------------------------------
 
--include $(DEPS)
+-include $(DEPS) $(WASM_OBJS:.o=.d)
